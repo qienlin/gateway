@@ -1,58 +1,56 @@
 package com.smartcity.gateway.server;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
 import org.apache.log4j.Logger;
 import org.hornetq.api.core.HornetQException;
-import org.hornetq.api.core.TransportConfiguration;
 import org.hornetq.api.core.client.ClientMessage;
 import org.hornetq.api.core.client.ClientProducer;
 import org.hornetq.api.core.client.ClientSession;
-import org.hornetq.api.core.client.HornetQClient;
-import org.hornetq.core.remoting.impl.netty.NettyConnectorFactory;
+import org.hornetq.api.core.client.ClientSessionFactory;
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.jboss.netty.buffer.ChannelBuffers;
+import org.jboss.netty.handler.codec.http.HttpHeaders;
+import org.jboss.netty.handler.codec.http.HttpRequest;
 
+import com.google.gson.Gson;
 import com.smartcity.gateway.utils.ClientSessionPool;
 
 public class QueueProducer {
 
 	private static final Logger LOG = Logger.getLogger(QueueProducer.class);
 
-	private static Properties properties;
+	private Properties properties;
 
-	private static ClientSessionPool pool;
+	private ClientSessionPool pool;
 
-	static {
-		properties = new Properties();
-		try {
-			properties.load(QueueProducer.class.getClassLoader().getResourceAsStream("config.properties"));
-		} catch (IOException e) {
-			e.printStackTrace();
-			LOG.error("Read config.properties error", e);
-		}
-		Map<String, Object> connParams = new HashMap<String, Object>();
-		connParams.put("host", properties.getProperty("host"));
-		connParams.put("port", properties.getProperty("port"));
-		try {
-			pool = new ClientSessionPool(500, HornetQClient.createServerLocatorWithHA(
-					new TransportConfiguration(NettyConnectorFactory.class.getName(), connParams))
-					.createSessionFactory());
-
-		} catch (Exception e) {
-			e.printStackTrace();
-			LOG.error("Error creating client session Factory", e);
-		}
+	public QueueProducer(ClientSessionFactory sessionFactory, Properties properties) {
+		this.properties = properties;
+		this.pool = new ClientSessionPool(Integer.valueOf(properties.getProperty("maxSessionCount")), sessionFactory);
 	}
 
-	public static void sendMessage(Object message) {
+	public void sendMessage(String channelId, HttpRequest request) {
 		ClientSession session = pool.getSessionInstanceIfFree();
-		ClientMessage msg = session.createMessage(true);
-		msg.putObjectProperty("data", message);
+		ClientMessage message = session.createMessage(true);
+		message.putStringProperty("httpconnId", channelId);
+		message.putStringProperty("httpversion", request.getProtocolVersion().getText());
+		message.putStringProperty("httpmethod", request.getMethod().getName());
+		message.putStringProperty("httpurl", request.getUri());
+		Map<String, String> headerMap = new HashMap<String, String>();
+		for (Map.Entry<String, String> header : request.getHeaders()) {
+			headerMap.put(header.getKey(), header.getValue());
+		}
+		headerMap.put("userName", request.getHeader("Authorization"));
+		message.putStringProperty("httpheaders", new Gson().toJson(headerMap));
+		ChannelBuffer buffer = ChannelBuffers.dynamicBuffer((int) HttpHeaders.getContentLength(request));
+		buffer.writeBytes(request.getContent());
+		message.putBytesProperty("httpcontent", buffer.array());
 		try {
 			ClientProducer producer = session.createProducer(properties.getProperty("sourceQueue"));
-			producer.send(msg);
+			System.err.println(channelId);
+			producer.send(message);
 			producer.close();
 			pool.freeSessionInstance(session);
 		} catch (HornetQException e) {

@@ -16,12 +16,9 @@
  */
 package com.smartcity.gateway.handlers;
 
-import java.util.Date;
 import java.util.concurrent.ConcurrentMap;
 
-import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBuffers;
-import org.jboss.netty.buffer.DynamicChannelBuffer;
 import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelFutureListener;
 import org.jboss.netty.channel.ChannelHandlerContext;
@@ -32,6 +29,7 @@ import org.jboss.netty.channel.SimpleChannelUpstreamHandler;
 import org.jboss.netty.handler.codec.frame.TooLongFrameException;
 import org.jboss.netty.handler.codec.http.DefaultHttpResponse;
 import org.jboss.netty.handler.codec.http.HttpHeaders.Names;
+import org.jboss.netty.handler.codec.http.HttpRequest;
 import org.jboss.netty.handler.codec.http.HttpResponse;
 import org.jboss.netty.handler.codec.http.HttpResponseStatus;
 import org.jboss.netty.handler.codec.http.HttpVersion;
@@ -44,39 +42,31 @@ import com.smartcity.gateway.server.QueueProducer;
  */
 public class GatewayHandler extends SimpleChannelUpstreamHandler {
 
-	private ConcurrentMap<Integer, Channel> connections;
+	private ConcurrentMap<String, Channel> connections;
 
-	public GatewayHandler(ConcurrentMap<Integer, Channel> connections) {
+	private QueueProducer producer;
+
+	public GatewayHandler(ConcurrentMap<String, Channel> connections, QueueProducer producer) {
 		this.connections = connections;
+		this.producer = producer;
 	}
 
 	@Override
 	public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
-		System.err.println("=========="+e.getMessage());
-		Channel ch = e.getChannel();
-		Thread.sleep(200);
-		QueueProducer.sendMessage("abc");
-		HttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
-		ChannelBuffer buffer = new DynamicChannelBuffer(2048);
-		buffer.writeBytes(("Hello World!\t" + new Date()).getBytes("UTF-8"));
-		response.setContent(buffer);
-		response.setHeader("Content-Type", "text/html; charset=UTF-8");
-		response.setHeader("Content-Length", response.getContent().writerIndex());
-		ch.write(response).addListener(ChannelFutureListener.CLOSE);
+		HttpRequest request = (HttpRequest) e.getMessage();
+		producer.sendMessage(String.valueOf(e.getChannel().getId()), request);
 		super.messageReceived(ctx, e);
 	}
 
 	@Override
 	public void channelConnected(ChannelHandlerContext ctx, ChannelStateEvent e) throws Exception {
-		Channel ch = e.getChannel();
-		this.connections.putIfAbsent(ch.getId(), ch);
+		this.connections.putIfAbsent(String.valueOf(e.getChannel().getId()), e.getChannel());
 		super.channelConnected(ctx, e);
 	}
 
 	@Override
 	public void channelDisconnected(ChannelHandlerContext ctx, ChannelStateEvent e) throws Exception {
-		Channel ch = e.getChannel();
-		this.connections.remove(ch.getId());
+		this.connections.remove(String.valueOf(e.getChannel().getId()));
 		super.channelDisconnected(ctx, e);
 	}
 
@@ -97,8 +87,6 @@ public class GatewayHandler extends SimpleChannelUpstreamHandler {
 		HttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, status);
 		response.setHeader(Names.CONTENT_TYPE, "text/plain; charset=UTF-8");
 		response.setContent(ChannelBuffers.copiedBuffer("Failure: " + status.toString() + "\r\n", CharsetUtil.UTF_8));
-
-		// Close the connection as soon as the error message is sent.
 		ctx.getChannel().write(response).addListener(ChannelFutureListener.CLOSE);
 	}
 }

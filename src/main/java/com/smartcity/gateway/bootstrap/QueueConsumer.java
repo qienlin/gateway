@@ -1,87 +1,96 @@
 package com.smartcity.gateway.bootstrap;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Date;
+import java.util.Properties;
+import java.util.concurrent.ConcurrentMap;
 
+import org.apache.log4j.Logger;
 import org.hornetq.api.core.HornetQException;
-import org.hornetq.api.core.TransportConfiguration;
 import org.hornetq.api.core.client.ClientConsumer;
 import org.hornetq.api.core.client.ClientMessage;
 import org.hornetq.api.core.client.ClientSession;
 import org.hornetq.api.core.client.ClientSessionFactory;
-import org.hornetq.api.core.client.HornetQClient;
 import org.hornetq.api.core.client.MessageHandler;
-import org.hornetq.api.core.client.ServerLocator;
-import org.hornetq.core.remoting.impl.netty.NettyConnectorFactory;
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.jboss.netty.buffer.DynamicChannelBuffer;
+import org.jboss.netty.channel.Channel;
+import org.jboss.netty.channel.ChannelFutureListener;
+import org.jboss.netty.handler.codec.http.DefaultHttpResponse;
+import org.jboss.netty.handler.codec.http.HttpResponse;
+import org.jboss.netty.handler.codec.http.HttpResponseStatus;
+import org.jboss.netty.handler.codec.http.HttpVersion;
 
-public class QueueConsumer{
-	
-	private ServerLocator locator;
-	private ClientSessionFactory sessionfactory;
-	private ClientSession session;
-	private ClientConsumer consumer;
-	public QueueConsumer(String host,int port,String queueName) {
-		Map<String, Object> connParams = new HashMap<String, Object>();
-		connParams.put("host", host);
-		connParams.put("port", port);
-//		HqMsgHandler handler = new HqMsgHandler();
-		locator = HornetQClient
-				.createServerLocatorWithHA(new TransportConfiguration(
-						NettyConnectorFactory.class.getName(), connParams));
-		try {
-			sessionfactory = locator.createSessionFactory();
-			session = sessionfactory.createTransactedSession();
-			consumer = session.createConsumer(queueName);
-			//consumer.setMessageHandler(handler);
-			consumer.setMessageHandler(new MessageHandler(){
+public class QueueConsumer {
 
-				public void onMessage(ClientMessage msg) {
-					System.out.println(msg.getObjectProperty("data"));
-					try {
-						System.out.println(msg.toString());
-						String connId = msg.getStringProperty("httpconnId");
-						String httpversion = msg.getStringProperty("httpversion");
-						int status = msg.getIntProperty("httpstatus");
-						String headers = msg.getStringProperty("httpheaders");
-						byte [] content = msg.getBytesProperty("JMSCorrelationID");;
-//						ResponseBean rpbean = new ResponseBean();
-//						
-//						rpbean.setConnId(connId);
-//						rpbean.setHttpversion(httpversion);
-//						rpbean.setStatus(status);
-//						rpbean.setHeaders(headers);
-//						rpbean.setContent(content);
-						msg.acknowledge();
-						session.commit();
-					} catch (HornetQException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
-				}
-				
-			});
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+	private static final Logger LOG = Logger.getLogger(QueueConsumer.class);
+
+	private ConcurrentMap<String, Channel> connections;
+
+	private Properties properties;
+
+	private ClientSessionFactory sessionFactory;
+
+	public QueueConsumer(ClientSessionFactory sessionFactory, ConcurrentMap<String, Channel> connections,
+			Properties properties) {
+		this.sessionFactory = sessionFactory;
+		this.connections = connections;
+		this.properties = properties;
+	}
+
+	public void start() {
+		for (int i = 0; i < Integer.valueOf(properties.getProperty("maxConsumerCount")); i++) {
+			try {
+				ClientSession session = sessionFactory.createSession();
+				session.start();
+				ClientConsumer consumer = session.createConsumer(properties.getProperty("targetQueue"));
+				consumer.setMessageHandler(new MessageConsumerHandler(connections, session));
+			} catch (HornetQException e) {
+				LOG.error("Error initializing consumer", e);
+			}
 		}
 	}
-    
-	public void start(){
-		try {
-			session.start();
-		} catch (HornetQException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+
+	private class MessageConsumerHandler implements MessageHandler {
+
+		private ConcurrentMap<String, Channel> connections;
+		private ClientSession session;
+
+		public MessageConsumerHandler(ConcurrentMap<String, Channel> connections, ClientSession session) {
+			this.connections = connections;
+			this.session = session;
 		}
-	}
-	
-	public void close(){
-		try{
-			if(session != null)session.close();
-			if(sessionfactory != null) sessionfactory.close();
-			if(locator != null) locator.close();
-		}catch(Exception e){
-			e.printStackTrace();
+
+		@Override
+		public void onMessage(ClientMessage msg) {
+			try {
+				String connId = msg.getStringProperty("httpconnId");
+				System.out.println(connId);
+				Channel ch = connections.get(connId);
+				HttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
+				ChannelBuffer buffer = new DynamicChannelBuffer(2048);
+				buffer.writeBytes(("Hello World!\t" + new Date()).getBytes("UTF-8"));
+				response.setContent(buffer);
+				response.setHeader("Content-Type", "text/html; charset=UTF-8");
+				response.setHeader("Content-Length", response.getContent().writerIndex());
+				ch.write(response).addListener(ChannelFutureListener.CLOSE);
+				// String httpversion = msg.getStringProperty("httpversion");
+				// int status = msg.getIntProperty("httpstatus");
+				// String headers = msg.getStringProperty("httpheaders");
+				// byte[] content = msg.getBytesProperty("JMSCorrelationID");
+				// ResponseBean rpbean = new ResponseBean();
+				//
+				// rpbean.setConnId(connId);
+				// rpbean.setHttpversion(httpversion);
+				// rpbean.setStatus(status);
+				// rpbean.setHeaders(headers);
+				// rpbean.setContent(content);
+				msg.acknowledge();
+				session.commit();
+			} catch (HornetQException e) {
+				e.printStackTrace();
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
 		}
 	}
 }

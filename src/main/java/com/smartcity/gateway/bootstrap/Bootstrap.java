@@ -31,8 +31,6 @@ public class Bootstrap {
 		// ApplicationContext context = new
 		// ClassPathXmlApplicationContext("classpath:applicationContext.xml");
 		// GatewayServer server = context.getBean(GatewayServer.class);
-		new GatewayServer().run(8080);
-		
-		
+		new GatewayServer().run();
 	}
 }

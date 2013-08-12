@@ -18,7 +18,11 @@ package com.smartcity.gateway.server;
 
 import static org.jboss.netty.channel.Channels.pipeline;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -27,6 +31,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.log4j.Logger;
+import org.hornetq.api.core.TransportConfiguration;
+import org.hornetq.api.core.client.ClientSessionFactory;
+import org.hornetq.api.core.client.HornetQClient;
+import org.hornetq.core.remoting.impl.netty.NettyConnectorFactory;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelPipeline;
@@ -47,15 +56,51 @@ import com.smartcity.gateway.handlers.GatewayHandler;
 // @Configuration
 public class GatewayServer {
 
-	private final ConcurrentMap<Integer, Channel> connections = new ConcurrentHashMap<Integer, Channel>();
+	private static final Logger LOG = Logger.getLogger(GatewayServer.class);
+
+	private static final String SERVER_PORT = "server.port";
+
+	private static final String HORNETQ_HOST = "hornetq.host";
+
+	private static final String HORNETQ_PORT = "hornetq.port";
+
+	private Properties properties;
+
+	private final ConcurrentMap<String, Channel> connections = new ConcurrentHashMap<String, Channel>();
 
 	private ServerBootstrap bootstrap;
 
-	public void run(int port) {
+	private ClientSessionFactory sessionFactory;
+
+	private void init() {
+		properties = new Properties();
+		try {
+			properties.load(GatewayServer.class.getClassLoader().getResourceAsStream("config.properties"));
+		} catch (IOException e) {
+			LOG.error("Error reading config.properties", e);
+		}
+		Map<String, Object> paramMap = new HashMap<String, Object>();
+		paramMap.put("host", properties.getProperty(HORNETQ_HOST));
+		paramMap.put("port", properties.getProperty(HORNETQ_PORT));
+		try {
+			sessionFactory = HornetQClient.createServerLocatorWithHA(
+					new TransportConfiguration(NettyConnectorFactory.class.getName(), paramMap)).createSessionFactory();
+		} catch (Exception e) {
+			LOG.error("Error initializing ClientSessionFactory", e);
+		}
+	}
+
+	public void run() {
+		init();
+		final QueueProducer producer = new QueueProducer(sessionFactory, properties);
+		// consumer initialization
+		QueueConsumer consumer = new QueueConsumer(sessionFactory, connections, properties);
+		consumer.start();
+
 		final Executor executor = new ThreadPoolExecutor(500, 500, 0L, TimeUnit.MILLISECONDS,
 				new ArrayBlockingQueue<Runnable>(300), Executors.defaultThreadFactory(),
 				new ThreadPoolExecutor.CallerRunsPolicy());
-		bootstrap = new ServerBootstrap(new NioServerSocketChannelFactory(Executors.newCachedThreadPool(),
+		bootstrap = new ServerBootstrap(new NioServerSocketChannelFactory(executor,
 				Executors.newCachedThreadPool()));
 		bootstrap.setPipelineFactory(new ChannelPipelineFactory() {
 			@Override
@@ -66,21 +111,11 @@ public class GatewayServer {
 				pipeline.addLast("encoder", new HttpResponseEncoder());
 				pipeline.addLast("chunked", new ChunkedWriteHandler());
 				pipeline.addLast("pipelineExecutor", new ExecutionHandler(executor));
-				pipeline.addLast("handler", new GatewayHandler(connections));
+				pipeline.addLast("handler", new GatewayHandler(connections, producer));
 				return pipeline;
 			}
 		});
 		bootstrap.setOption("child.KeepAlive", true);
-		bootstrap.bind(new InetSocketAddress(port));
-
-		QueueConsumer cm = new QueueConsumer("127.0.0.1", 5445, "jms.queue.sourceQueue");
-		cm.start();
-		cm.start();
-		try {
-			Thread.sleep(200000);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
-		cm.close();
+		bootstrap.bind(new InetSocketAddress(Integer.valueOf(properties.getProperty(SERVER_PORT))));
 	}
 }
