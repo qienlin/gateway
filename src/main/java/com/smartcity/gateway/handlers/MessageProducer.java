@@ -1,4 +1,4 @@
-package com.smartcity.gateway.server;
+package com.smartcity.gateway.handlers;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -18,19 +18,42 @@ import org.jboss.netty.handler.codec.http.HttpRequest;
 import com.google.gson.Gson;
 import com.smartcity.gateway.utils.ClientSessionPool;
 
-public class QueueProducer {
+public class MessageProducer {
 
-	private static final Logger LOG = Logger.getLogger(QueueProducer.class);
+	private static final Logger LOG = Logger.getLogger(MessageProducer.class);
+	
+	private static final String MAX_SESSION_COUNT = "maxSessionCount";
+	
+	private static final String SOURCE_QUEUE = "sourceQueue";
 
+	/**
+	 * The property file
+	 */
 	private Properties properties;
 
+	/**
+	 * The client session pool
+	 */
 	private ClientSessionPool pool;
 
-	public QueueProducer(ClientSessionFactory sessionFactory, Properties properties) {
+	/**
+	 * Constructor
+	 * 
+	 * @param sessionFactory
+	 * @param properties
+	 */
+	public MessageProducer(ClientSessionFactory sessionFactory, Properties properties) {
 		this.properties = properties;
-		this.pool = new ClientSessionPool(Integer.valueOf(properties.getProperty("maxSessionCount")), sessionFactory);
+		this.pool = new ClientSessionPool(Integer.valueOf(properties.getProperty(MAX_SESSION_COUNT)), sessionFactory);
 	}
 
+	/**
+	 * Wrap up the received HTTP request and send it to the 
+	 * HornetQ 
+	 * 
+	 * @param channelId
+	 * @param request
+	 */
 	public void sendMessage(String channelId, HttpRequest request) {
 		ClientSession session = pool.getSessionInstanceIfFree();
 		ClientMessage message = session.createMessage(true);
@@ -48,13 +71,13 @@ public class QueueProducer {
 		buffer.writeBytes(request.getContent());
 		message.putBytesProperty("httpcontent", buffer.array());
 		try {
-			ClientProducer producer = session.createProducer(properties.getProperty("sourceQueue"));
+			ClientProducer producer = session.createProducer(properties.getProperty(SOURCE_QUEUE));
+			LOG.debug("Sending message. Channel Id: " + channelId);
 			System.err.println(channelId);
 			producer.send(message);
 			producer.close();
 			pool.freeSessionInstance(session);
 		} catch (HornetQException e) {
-			e.printStackTrace();
 			LOG.error("Error creating ClientProducer or sending message", e);
 		}
 	}

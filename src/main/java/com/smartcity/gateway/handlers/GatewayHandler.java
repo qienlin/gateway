@@ -35,41 +35,65 @@ import org.jboss.netty.handler.codec.http.HttpResponseStatus;
 import org.jboss.netty.handler.codec.http.HttpVersion;
 import org.jboss.netty.util.CharsetUtil;
 
-import com.smartcity.gateway.server.QueueProducer;
-
 /**
  * @author (qienlin) Aug 9, 2013
  */
 public class GatewayHandler extends SimpleChannelUpstreamHandler {
 
+	/**
+	 * All the established connections
+	 */
 	private ConcurrentMap<String, Channel> connections;
 
-	private QueueProducer producer;
+	/**
+	 * The message producer
+	 */
+	private MessageProducer producer;
 
-	public GatewayHandler(ConcurrentMap<String, Channel> connections, QueueProducer producer) {
+	/**
+	 * Constructor
+	 * 
+	 * @param connections
+	 * @param producer
+	 */
+	public GatewayHandler(ConcurrentMap<String, Channel> connections, MessageProducer producer) {
 		this.connections = connections;
 		this.producer = producer;
 	}
 
+	/* (non-Javadoc)
+	 * @see org.jboss.netty.channel.SimpleChannelUpstreamHandler#messageReceived(org.jboss.netty.channel.ChannelHandlerContext, org.jboss.netty.channel.MessageEvent)
+	 */
 	@Override
 	public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
 		HttpRequest request = (HttpRequest) e.getMessage();
+		//FIXME authentication to CAS
 		producer.sendMessage(String.valueOf(e.getChannel().getId()), request);
 		super.messageReceived(ctx, e);
 	}
 
+	/* (non-Javadoc)
+	 * @see org.jboss.netty.channel.SimpleChannelUpstreamHandler#channelConnected(org.jboss.netty.channel.ChannelHandlerContext, org.jboss.netty.channel.ChannelStateEvent)
+	 */
 	@Override
 	public void channelConnected(ChannelHandlerContext ctx, ChannelStateEvent e) throws Exception {
+		//FIXME Error using UUID
 		this.connections.putIfAbsent(String.valueOf(e.getChannel().getId()), e.getChannel());
 		super.channelConnected(ctx, e);
 	}
 
+	/* (non-Javadoc)
+	 * @see org.jboss.netty.channel.SimpleChannelUpstreamHandler#channelDisconnected(org.jboss.netty.channel.ChannelHandlerContext, org.jboss.netty.channel.ChannelStateEvent)
+	 */
 	@Override
 	public void channelDisconnected(ChannelHandlerContext ctx, ChannelStateEvent e) throws Exception {
 		this.connections.remove(String.valueOf(e.getChannel().getId()));
 		super.channelDisconnected(ctx, e);
 	}
 
+	/* (non-Javadoc)
+	 * @see org.jboss.netty.channel.SimpleChannelUpstreamHandler#exceptionCaught(org.jboss.netty.channel.ChannelHandlerContext, org.jboss.netty.channel.ExceptionEvent)
+	 */
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, ExceptionEvent e) throws Exception {
 		Channel ch = e.getChannel();
@@ -83,6 +107,12 @@ public class GatewayHandler extends SimpleChannelUpstreamHandler {
 		}
 	}
 
+	/**
+	 * Send error response back to the client.
+	 * 
+	 * @param ctx
+	 * @param status
+	 */
 	private void sendError(ChannelHandlerContext ctx, HttpResponseStatus status) {
 		HttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, status);
 		response.setHeader(Names.CONTENT_TYPE, "text/plain; charset=UTF-8");

@@ -47,8 +47,9 @@ import org.jboss.netty.handler.codec.http.HttpResponseEncoder;
 import org.jboss.netty.handler.execution.ExecutionHandler;
 import org.jboss.netty.handler.stream.ChunkedWriteHandler;
 
-import com.smartcity.gateway.bootstrap.QueueConsumer;
 import com.smartcity.gateway.handlers.GatewayHandler;
+import com.smartcity.gateway.handlers.MessageConsumer;
+import com.smartcity.gateway.handlers.MessageProducer;
 
 /**
  * @author (qienlin) Aug 9, 2013
@@ -64,14 +65,25 @@ public class GatewayServer {
 
 	private static final String HORNETQ_PORT = "hornetq.port";
 
+	/**
+	 * The property file
+	 */
 	private Properties properties;
 
+	/**
+	 * All the established connections
+	 */
 	private final ConcurrentMap<String, Channel> connections = new ConcurrentHashMap<String, Channel>();
 
-	private ServerBootstrap bootstrap;
-
+	/**
+	 * The client session factory for creating sessions
+	 */
 	private ClientSessionFactory sessionFactory;
 
+	/**
+	 * Initiate context including loading {@code Properties} file and instantiate 
+	 * the {@code ClientSessionFactory}.
+	 */
 	private void init() {
 		properties = new Properties();
 		try {
@@ -90,17 +102,22 @@ public class GatewayServer {
 		}
 	}
 
+	/**
+	 * A method to instantiate {@code ServerBootstrap} and 
+	 * listen on the port given.
+	 * 
+	 */
 	public void run() {
 		init();
-		final QueueProducer producer = new QueueProducer(sessionFactory, properties);
+		final MessageProducer producer = new MessageProducer(sessionFactory, properties);
 		// consumer initialization
-		QueueConsumer consumer = new QueueConsumer(sessionFactory, connections, properties);
+		MessageConsumer consumer = new MessageConsumer(sessionFactory, connections, properties);
 		consumer.start();
 
 		final Executor executor = new ThreadPoolExecutor(500, 500, 0L, TimeUnit.MILLISECONDS,
 				new ArrayBlockingQueue<Runnable>(300), Executors.defaultThreadFactory(),
 				new ThreadPoolExecutor.CallerRunsPolicy());
-		bootstrap = new ServerBootstrap(new NioServerSocketChannelFactory(executor,
+		ServerBootstrap bootstrap = new ServerBootstrap(new NioServerSocketChannelFactory(executor,
 				Executors.newCachedThreadPool()));
 		bootstrap.setPipelineFactory(new ChannelPipelineFactory() {
 			@Override
