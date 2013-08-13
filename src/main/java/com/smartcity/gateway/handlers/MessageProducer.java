@@ -21,9 +21,9 @@ import com.smartcity.gateway.utils.ClientSessionPool;
 public class MessageProducer {
 
 	private static final Logger LOG = Logger.getLogger(MessageProducer.class);
-	
+
 	private static final String MAX_SESSION_COUNT = "maxSessionCount";
-	
+
 	private static final String SOURCE_QUEUE = "sourceQueue";
 
 	/**
@@ -48,8 +48,7 @@ public class MessageProducer {
 	}
 
 	/**
-	 * Wrap up the received HTTP request and send it to the 
-	 * HornetQ 
+	 * Wrap up the received HTTP request and send it to the HornetQ
 	 * 
 	 * @param channelId
 	 * @param request

@@ -81,8 +81,8 @@ public class GatewayServer {
 	private ClientSessionFactory sessionFactory;
 
 	/**
-	 * Initiate context including loading {@code Properties} file and instantiate 
-	 * the {@code ClientSessionFactory}.
+	 * Initiate context including loading {@code Properties} file and
+	 * instantiate the {@code ClientSessionFactory}.
 	 */
 	private void init() {
 		properties = new Properties();
@@ -103,8 +103,8 @@ public class GatewayServer {
 	}
 
 	/**
-	 * A method to instantiate {@code ServerBootstrap} and 
-	 * listen on the port given.
+	 * A method to instantiate {@code ServerBootstrap} and listen on the port
+	 * given.
 	 * 
 	 */
 	public void run() {

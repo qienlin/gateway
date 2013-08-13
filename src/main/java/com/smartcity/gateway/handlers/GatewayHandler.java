@@ -61,29 +61,44 @@ public class GatewayHandler extends SimpleChannelUpstreamHandler {
 		this.producer = producer;
 	}
 
-	/* (non-Javadoc)
-	 * @see org.jboss.netty.channel.SimpleChannelUpstreamHandler#messageReceived(org.jboss.netty.channel.ChannelHandlerContext, org.jboss.netty.channel.MessageEvent)
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * org.jboss.netty.channel.SimpleChannelUpstreamHandler#messageReceived(
+	 * org.jboss.netty.channel.ChannelHandlerContext,
+	 * org.jboss.netty.channel.MessageEvent)
 	 */
 	@Override
 	public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
 		HttpRequest request = (HttpRequest) e.getMessage();
-		//FIXME authentication to CAS
+		// FIXME authentication to CAS
 		producer.sendMessage(String.valueOf(e.getChannel().getId()), request);
 		super.messageReceived(ctx, e);
 	}
 
-	/* (non-Javadoc)
-	 * @see org.jboss.netty.channel.SimpleChannelUpstreamHandler#channelConnected(org.jboss.netty.channel.ChannelHandlerContext, org.jboss.netty.channel.ChannelStateEvent)
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * org.jboss.netty.channel.SimpleChannelUpstreamHandler#channelConnected
+	 * (org.jboss.netty.channel.ChannelHandlerContext,
+	 * org.jboss.netty.channel.ChannelStateEvent)
 	 */
 	@Override
 	public void channelConnected(ChannelHandlerContext ctx, ChannelStateEvent e) throws Exception {
-		//FIXME Error using UUID
+		// FIXME Error using UUID
 		this.connections.putIfAbsent(String.valueOf(e.getChannel().getId()), e.getChannel());
 		super.channelConnected(ctx, e);
 	}
 
-	/* (non-Javadoc)
-	 * @see org.jboss.netty.channel.SimpleChannelUpstreamHandler#channelDisconnected(org.jboss.netty.channel.ChannelHandlerContext, org.jboss.netty.channel.ChannelStateEvent)
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * org.jboss.netty.channel.SimpleChannelUpstreamHandler#channelDisconnected
+	 * (org.jboss.netty.channel.ChannelHandlerContext,
+	 * org.jboss.netty.channel.ChannelStateEvent)
 	 */
 	@Override
 	public void channelDisconnected(ChannelHandlerContext ctx, ChannelStateEvent e) throws Exception {
@@ -91,8 +106,13 @@ public class GatewayHandler extends SimpleChannelUpstreamHandler {
 		super.channelDisconnected(ctx, e);
 	}
 
-	/* (non-Javadoc)
-	 * @see org.jboss.netty.channel.SimpleChannelUpstreamHandler#exceptionCaught(org.jboss.netty.channel.ChannelHandlerContext, org.jboss.netty.channel.ExceptionEvent)
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * org.jboss.netty.channel.SimpleChannelUpstreamHandler#exceptionCaught(
+	 * org.jboss.netty.channel.ChannelHandlerContext,
+	 * org.jboss.netty.channel.ExceptionEvent)
 	 */
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, ExceptionEvent e) throws Exception {
