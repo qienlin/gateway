@@ -35,6 +35,8 @@ import org.jboss.netty.handler.codec.http.HttpResponseStatus;
 import org.jboss.netty.handler.codec.http.HttpVersion;
 import org.jboss.netty.util.CharsetUtil;
 
+import com.smartcity.gateway.bamosclient.BamosClient;
+
 /**
  * @author (qienlin) Aug 9, 2013
  */
@@ -72,7 +74,10 @@ public class GatewayHandler extends SimpleChannelUpstreamHandler {
 	@Override
 	public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
 		HttpRequest request = (HttpRequest) e.getMessage();
+		BamosClient.onCall("gateway", String.valueOf(e.getChannel().getId()));
+		BamosClient.onCall("cas", String.valueOf(e.getChannel().getId()));
 		// FIXME authentication to CAS
+		BamosClient.onCall("cas", String.valueOf(e.getChannel().getId()));
 		producer.sendMessage(String.valueOf(e.getChannel().getId()), request);
 		super.messageReceived(ctx, e);
 	}

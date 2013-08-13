@@ -16,6 +16,7 @@ import org.jboss.netty.handler.codec.http.HttpHeaders;
 import org.jboss.netty.handler.codec.http.HttpRequest;
 
 import com.google.gson.Gson;
+import com.smartcity.gateway.bamosclient.BamosClient;
 import com.smartcity.gateway.utils.ClientSessionPool;
 
 public class MessageProducer {
@@ -73,7 +74,9 @@ public class MessageProducer {
 			ClientProducer producer = session.createProducer(properties.getProperty(SOURCE_QUEUE));
 			LOG.debug("Sending message. Channel Id: " + channelId);
 			System.err.println(channelId);
+			BamosClient.onCall("queue", channelId);
 			producer.send(message);
+			BamosClient.onCall("queue", channelId);
 			producer.close();
 			pool.freeSessionInstance(session);
 		} catch (HornetQException e) {
